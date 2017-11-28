@@ -16,10 +16,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -486,7 +485,7 @@ multi_instance_string(const struct multi_instance *mi, bool null, struct gc_aren
     }
 }
 
-void
+static void
 generate_prefix(struct multi_instance *mi)
 {
     struct gc_arena gc = gc_new();
@@ -537,10 +536,14 @@ multi_del_iroutes(struct multi_context *m,
     if (TUNNEL_TYPE(mi->context.c1.tuntap) == DEV_TYPE_TUN)
     {
         for (ir = mi->context.options.iroutes; ir != NULL; ir = ir->next)
+        {
             mroute_helper_del_iroute46(m->route_helper, ir->netbits);
+        }
 
         for (ir6 = mi->context.options.iroutes_ipv6; ir6 != NULL; ir6 = ir6->next)
+        {
             mroute_helper_del_iroute46(m->route_helper, ir6->netbits);
+        }
     }
 }
 
@@ -819,7 +822,8 @@ multi_create_instance(struct multi_context *m, const struct mroute_addr *real)
     mi->did_iter = true;
 
 #ifdef MANAGEMENT_DEF_AUTH
-    do {
+    do
+    {
         mi->context.c2.mda_context.cid = m->cid_counter++;
     } while (!hash_add(m->cid_hash, &mi->context.c2.mda_context.cid, mi, false));
     mi->did_cid_hash = true;
@@ -2351,7 +2355,7 @@ multi_process_post(struct multi_context *m, struct multi_instance *mi, const uns
             }
             else
             {
-                msg(M_NONFATAL, "MULTI: inotify_add_watch error: %s", strerror(errno));
+                msg(M_NONFATAL | M_ERRNO, "MULTI: inotify_add_watch error");
             }
         }
 #endif
@@ -2949,17 +2953,21 @@ gremlin_flood_clients(struct multi_context *m)
             parm.packet_size);
 
         for (i = 0; i < parm.packet_size; ++i)
+        {
             ASSERT(buf_write_u8(&buf, get_random() & 0xFF));
+        }
 
         for (i = 0; i < parm.n_packets; ++i)
+        {
             multi_bcast(m, &buf, NULL, NULL);
+        }
 
         gc_free(&gc);
     }
 }
 #endif /* ifdef ENABLE_DEBUG */
 
-bool
+static bool
 stale_route_check_trigger(struct multi_context *m)
 {
     struct timeval null;
@@ -3375,6 +3383,7 @@ tunnel_server(struct context *top)
 
 #else  /* if P2MP_SERVER */
 static void
-dummy(void) {
+dummy(void)
+{
 }
 #endif /* P2MP_SERVER */

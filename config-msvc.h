@@ -4,7 +4,6 @@
 
 #define ENABLE_DEF_AUTH 1
 #define ENABLE_PF 1
-#define ENABLE_CLIENT_SERVER 1
 #define ENABLE_CRYPTO 1
 #define ENABLE_CRYPTO_OPENSSL 1
 #define ENABLE_DEBUG 1
@@ -126,6 +125,7 @@ typedef __int64 int64_t;
 typedef __int32 int32_t;
 typedef __int16 int16_t;
 typedef __int8 int8_t;
+typedef uint16_t in_port_t;
 
 #ifdef HAVE_CONFIG_MSVC_LOCAL_H
 #include <config-msvc-local.h>

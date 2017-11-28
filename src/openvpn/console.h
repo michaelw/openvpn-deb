@@ -18,11 +18,10 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- */
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+*/
 
 #ifndef CONSOLE_H
 #define CONSOLE_H
@@ -47,7 +46,7 @@ extern struct _query_user query_user[];  /**< Global variable, declared in conso
  * Wipes all data put into all of the query_user structs
  *
  */
-void query_user_clear();
+void query_user_clear(void);
 
 
 /**
@@ -73,7 +72,7 @@ void query_user_add(char *prompt, size_t prompt_len,
  *
  * @return True if executing all the defined steps completed successfully
  */
-bool query_user_exec_builtin();
+bool query_user_exec_builtin(void);
 
 
 #if defined(ENABLE_SYSTEMD)
@@ -84,7 +83,7 @@ bool query_user_exec_builtin();
  *
  * @return True if executing all the defined steps completed successfully
  */
-bool query_user_exec();
+bool query_user_exec(void);
 
 #else  /* ENABLE_SYSTEMD not defined*/
 /**
@@ -93,7 +92,7 @@ bool query_user_exec();
  *
  */
 static bool
-query_user_exec()
+query_user_exec(void)
 {
     return query_user_exec_builtin();
 }

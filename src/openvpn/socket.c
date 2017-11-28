@@ -16,10 +16,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -205,7 +204,9 @@ do_preresolve_host(struct context *c,
         {
             struct cached_dns_entry *prev = c->c1.dns_cache;
             while (prev->next)
+            {
                 prev = prev->next;
+            }
             prev->next = ph;
         }
 
@@ -336,20 +337,6 @@ openvpn_getaddrinfo(unsigned int flags,
     ASSERT(hostname || servname);
     ASSERT(!(flags & GETADDR_HOST_ORDER));
 
-    if (hostname && (flags & GETADDR_RANDOMIZE))
-    {
-        hostname = hostname_randomize(hostname, &gc);
-    }
-
-    if (hostname)
-    {
-        print_hostname = hostname;
-    }
-    else
-    {
-        print_hostname = "undefined";
-    }
-
     if (servname)
     {
         print_servname = servname;
@@ -399,6 +386,20 @@ openvpn_getaddrinfo(unsigned int flags,
                               ((resolve_retry_seconds + 4)/ fail_wait_interval);
         const char *fmt;
         int level = 0;
+
+        if (hostname && (flags & GETADDR_RANDOMIZE))
+        {
+            hostname = hostname_randomize(hostname, &gc);
+        }
+
+        if (hostname)
+        {
+            print_hostname = hostname;
+        }
+        else
+        {
+            print_hostname = "undefined";
+        }
 
         fmt = "RESOLVE: Cannot resolve host address: %s:%s (%s)";
         if ((flags & GETADDR_MENTION_RESOLVE_RETRY)
@@ -495,7 +496,7 @@ openvpn_getaddrinfo(unsigned int flags,
                 goto done;
             }
 
-            openvpn_sleep(fail_wait_interval);
+            management_sleep(fail_wait_interval);
         }
 
         ASSERT(res);
@@ -510,6 +511,10 @@ openvpn_getaddrinfo(unsigned int flags,
     else
     {
         /* IP address parse succeeded */
+        if (flags & GETADDR_RANDOMIZE)
+        {
+            msg(M_WARN, "WARNING: ignoring --remote-random-hostname because the hostname is an IP address");
+        }
     }
 
 done:
@@ -1144,7 +1149,7 @@ tcp_connection_established(const struct link_socket_actual *act)
     gc_free(&gc);
 }
 
-static int
+static socket_descriptor_t
 socket_listen_accept(socket_descriptor_t sd,
                      struct link_socket_actual *act,
                      const char *remote_dynamic,
@@ -1156,7 +1161,7 @@ socket_listen_accept(socket_descriptor_t sd,
     struct gc_arena gc = gc_new();
     /* struct openvpn_sockaddr *remote = &act->dest; */
     struct openvpn_sockaddr remote_verify = act->dest;
-    int new_sd = SOCKET_UNDEFINED;
+    socket_descriptor_t new_sd = SOCKET_UNDEFINED;
 
     CLEAR(*act);
     socket_do_listen(sd, local, do_listen, true);
@@ -1188,7 +1193,7 @@ socket_listen_accept(socket_descriptor_t sd,
 
         if (status <= 0)
         {
-            openvpn_sleep(1);
+            management_sleep(1);
             continue;
         }
 
@@ -1223,7 +1228,7 @@ socket_listen_accept(socket_descriptor_t sd,
                 break;
             }
         }
-        openvpn_sleep(1);
+        management_sleep(1);
     }
 
     if (!nowait && openvpn_close_socket(sd))
@@ -1292,11 +1297,9 @@ socket_bind(socket_descriptor_t sd,
     }
     if (bind(sd, cur->ai_addr, cur->ai_addrlen))
     {
-        const int errnum = openvpn_errno();
-        msg(M_FATAL, "%s: Socket bind failed on local address %s: %s",
+        msg(M_FATAL | M_ERRNO, "%s: Socket bind failed on local address %s",
             prefix,
-            print_sockaddr_ex(local->ai_addr, ":", PS_SHOW_PORT, &gc),
-            strerror_ts(errnum, &gc));
+            print_sockaddr_ex(local->ai_addr, ":", PS_SHOW_PORT, &gc));
     }
     gc_free(&gc);
 }
@@ -1371,7 +1374,7 @@ openvpn_connect(socket_descriptor_t sd,
 #endif
                     break;
                 }
-                openvpn_sleep(1);
+                management_sleep(1);
                 continue;
             }
 
@@ -1428,7 +1431,7 @@ set_actual_address(struct link_socket_actual *actual, struct addrinfo *ai)
 
 }
 
-void
+static void
 socket_connect(socket_descriptor_t *sd,
                const struct sockaddr *dest,
                const int connect_timeout,
@@ -1470,10 +1473,8 @@ socket_connect(socket_descriptor_t *sd,
     if (status)
     {
 
-        msg(D_LINK_ERRORS,
-            "TCP: connect to %s failed: %s",
-            print_sockaddr(dest, &gc),
-            strerror_ts(status, &gc));
+        msg(D_LINK_ERRORS, "TCP: connect to %s failed: %s",
+            print_sockaddr(dest, &gc), strerror(status));
 
         openvpn_close_socket(*sd);
         *sd = SOCKET_UNDEFINED;
@@ -1785,6 +1786,8 @@ link_socket_init_phase1(struct link_socket *sock,
         ASSERT(sock->info.proto == PROTO_TCP_SERVER);
         ASSERT(!sock->inetd);
         sock->sd = accept_from->sd;
+        /* inherit (possibly guessed) info AF from parent context */
+        sock->info.af = accept_from->info.af;
     }
 
     /* are we running in HTTP proxy mode? */
@@ -2008,7 +2011,8 @@ static void
 phase2_tcp_client(struct link_socket *sock, struct signal_info *sig_info)
 {
     bool proxy_retry = false;
-    do {
+    do
+    {
         socket_connect(&sock->sd,
                        sock->info.lsa->current_remote->ai_addr,
                        get_server_poll_remaining_time(sock->server_poll_timeout),
@@ -2364,7 +2368,8 @@ link_socket_bad_incoming_addr(struct buffer *buf,
                 (int)from_addr->dest.addr.sa.sa_family,
                 print_sockaddr_ex(info->lsa->remote_list->ai_addr,":",PS_SHOW_PORT, &gc));
             /* print additional remote addresses */
-            for (ai = info->lsa->remote_list->ai_next; ai; ai = ai->ai_next) {
+            for (ai = info->lsa->remote_list->ai_next; ai; ai = ai->ai_next)
+            {
                 msg(D_LINK_ERRORS,"or from peer address: %s",
                     print_sockaddr_ex(ai->ai_addr,":",PS_SHOW_PORT, &gc));
             }
@@ -3053,10 +3058,12 @@ ascii2proto(const char *proto_name)
 {
     int i;
     for (i = 0; i < SIZE(proto_names); ++i)
+    {
         if (!strcmp(proto_name, proto_names[i].short_form))
         {
             return proto_names[i].proto;
         }
+    }
     return -1;
 }
 
@@ -3065,10 +3072,12 @@ ascii2af(const char *proto_name)
 {
     int i;
     for (i = 0; i < SIZE(proto_names); ++i)
+    {
         if (!strcmp(proto_name, proto_names[i].short_form))
         {
             return proto_names[i].proto_af;
         }
+    }
     return 0;
 }
 
@@ -3877,12 +3886,11 @@ socket_bind_unix(socket_descriptor_t sd,
 
     if (bind(sd, (struct sockaddr *) local, sizeof(struct sockaddr_un)))
     {
-        const int errnum = openvpn_errno();
-        msg(M_FATAL, "%s: Socket bind[%d] failed on unix domain socket %s: %s",
+        msg(M_FATAL | M_ERRNO,
+            "%s: Socket bind[%d] failed on unix domain socket %s",
             prefix,
             (int)sd,
-            sockaddr_unix_name(local, "NULL"),
-            strerror_ts(errnum, &gc));
+            sockaddr_unix_name(local, "NULL"));
     }
 
 #ifdef HAVE_UMASK

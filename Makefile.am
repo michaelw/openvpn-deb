@@ -18,10 +18,9 @@
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #  GNU General Public License for more details.
 #
-#  You should have received a copy of the GNU General Public License
-#  along with this program (see the file COPYING included with this
-#  distribution); if not, write to the Free Software Foundation, Inc.,
-#  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#  You should have received a copy of the GNU General Public License along
+#  with this program; if not, write to the Free Software Foundation, Inc.,
+#  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
 # This option prevents autoreconf from overriding our COPYING and
@@ -59,7 +58,7 @@ SUBDIRS = build distro include src sample doc vendor tests
 dist_doc_DATA = \
 	README \
 	README.IPv6 \
-	README.polarssl \
+	README.mbedtls \
 	Changes.rst \
 	COPYRIGHT.GPL \
 	COPYING
@@ -69,7 +68,7 @@ dist_noinst_DATA = \
 	.gitattributes \
 	PORTS \
 	README.IPv6 TODO.IPv6 \
-	README.polarssl \
+	README.mbedtls \
 	openvpn.sln \
 	msvc-env.bat \
 	msvc-dev.bat \

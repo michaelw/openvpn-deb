@@ -16,10 +16,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -69,7 +68,7 @@ static void man_output_standalone(struct management *man, volatile int *signal_r
 static void man_reset_client_socket(struct management *man, const bool exiting);
 
 static void
-man_help()
+man_help(void)
 {
     msg(M_CLIENT, "Management Interface for %s", title_string);
     msg(M_CLIENT, "Commands:");
@@ -1879,17 +1878,15 @@ man_connect(struct management *man)
 #if UNIX_SOCK_SUPPORT
         if (man->settings.flags & MF_UNIX_SOCK)
         {
-            msg(D_LINK_ERRORS,
-                "MANAGEMENT: connect to unix socket %s failed: %s",
-                sockaddr_unix_name(&man->settings.local_unix, "NULL"),
-                strerror_ts(status, &gc));
+            msg(D_LINK_ERRORS | M_ERRNO,
+                "MANAGEMENT: connect to unix socket %s failed",
+                sockaddr_unix_name(&man->settings.local_unix, "NULL"));
         }
         else
 #endif
-        msg(D_LINK_ERRORS,
-            "MANAGEMENT: connect to %s failed: %s",
-            print_sockaddr(man->settings.local->ai_addr, &gc),
-            strerror_ts(status, &gc));
+        msg(D_LINK_ERRORS | M_ERRNO,
+            "MANAGEMENT: connect to %s failed",
+            print_sockaddr(man->settings.local->ai_addr, &gc));
         throw_signal_soft(SIGTERM, "management-connect-failed");
         goto done;
     }
@@ -1984,7 +1981,9 @@ man_process_command(struct management *man, const char *line)
         {
             int i;
             for (i = 0; i < nparms; ++i)
+            {
                 msg(M_INFO, "[%d] '%s'", i, parms[i]);
+            }
         }
 #endif
 
@@ -2007,9 +2006,8 @@ man_io_error(struct management *man, const char *prefix)
     if (!ignore_sys_error(err))
     {
         struct gc_arena gc = gc_new();
-        msg(D_MANAGEMENT, "MANAGEMENT: TCP %s error: %s",
-            prefix,
-            strerror_ts(err, &gc));
+        msg(D_MANAGEMENT, "MANAGEMENT: TCP %s error: %s", prefix,
+            strerror(err));
         gc_free(&gc);
         return true;
     }
@@ -3088,7 +3086,8 @@ management_io(struct management *man)
                 if (net_events & FD_READ)
                 {
                     while (man_read(man) > 0)
-                        ;
+                    {
+                    }
                     net_event_win32_clear_selected_events(&man->connection.ne32, FD_READ);
                 }
 
@@ -3311,7 +3310,8 @@ man_wait_for_client_connection(struct management *man,
         {
             msg(D_MANAGEMENT, "Need information from management interface, waiting...");
         }
-        do {
+        do
+        {
             man_standalone_event_loop(man, signal_received, expire);
             if (signal_received && *signal_received)
             {
@@ -3501,7 +3501,9 @@ management_query_user_pass(struct management *man,
          */
         if (ret)
         {
-            man->connection.up_query.nocache = up->nocache; /* preserve caller's nocache setting */
+            /* preserve caller's settings */
+            man->connection.up_query.nocache = up->nocache;
+            man->connection.up_query.wait_for_push = up->wait_for_push;
             *up = man->connection.up_query;
         }
         secure_memzero(&man->connection.up_query, sizeof(man->connection.up_query));
@@ -3513,7 +3515,7 @@ management_query_user_pass(struct management *man,
 
 #ifdef MANAGMENT_EXTERNAL_KEY
 
-int
+static int
 management_query_multiline(struct management *man,
                            const char *b64_data, const char *prompt, const char *cmd, int *state, struct buffer_list **input)
 {
@@ -3589,7 +3591,7 @@ done:
     return ret;
 }
 
-char *
+static char *
 /* returns allocated base64 signature */
 management_query_multiline_flatten_newline(struct management *man,
                                            const char *b64_data, const char *prompt, const char *cmd, int *state, struct buffer_list **input)
@@ -3618,7 +3620,7 @@ management_query_multiline_flatten_newline(struct management *man,
     return result;
 }
 
-char *
+static char *
 /* returns allocated base64 signature */
 management_query_multiline_flatten(struct management *man,
                                    const char *b64_data, const char *prompt, const char *cmd, int *state, struct buffer_list **input)
@@ -3929,7 +3931,9 @@ log_history_free_contents(struct log_history *h)
 {
     int i;
     for (i = 0; i < h->size; ++i)
+    {
         log_entry_free_contents(&h->array[log_index(h, i)]);
+    }
     free(h->array);
 }
 
@@ -3973,7 +3977,9 @@ log_history_resize(struct log_history *h, const int capacity)
         log_history_obj_init(&newlog, capacity);
 
         for (i = 0; i < h->size; ++i)
+        {
             log_history_add(&newlog, &h->array[log_index(h, i)]);
+        }
 
         log_history_free_contents(h);
         *h = newlog;
@@ -3993,8 +3999,25 @@ log_history_ref(const struct log_history *h, const int index)
     }
 }
 
-#else  /* ifdef ENABLE_MANAGEMENT */
-static void
-dummy(void) {
+void
+management_sleep(const int n)
+{
+    if (management)
+    {
+        management_event_loop_n_seconds(management, n);
+    }
+    else
+    {
+        sleep(n);
+    }
 }
+
+#else  /* ifdef ENABLE_MANAGEMENT */
+
+void
+management_sleep(const int n)
+{
+    sleep(n);
+}
+
 #endif /* ENABLE_MANAGEMENT */
