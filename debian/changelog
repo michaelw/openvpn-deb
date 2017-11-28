@@ -1,3 +1,9 @@
+openvpn (2.4.0-4ubuntu1.3instart1) xenial; urgency=low
+
+  * Fixed build deps (dh-autoreconf, etc.)
+
+ -- Michael Weber <mweber@instartlogic.com>  Mon, 27 Nov 2017 22:16:23 -0800
+
 openvpn (2.4.0-4ubuntu1.3) zesty-security; urgency=medium
 
   * SECURITY UPDATE: Remotely-triggerable ASSERT() on malformed IPv6 packet
