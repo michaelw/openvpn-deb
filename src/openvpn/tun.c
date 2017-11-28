@@ -16,10 +16,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 /*
@@ -560,7 +559,9 @@ is_tun_p2p(const struct tuntap *tt)
 {
     bool tun = false;
 
-    if (tt->type == DEV_TYPE_TAP || (tt->type == DEV_TYPE_TUN && tt->topology == TOP_SUBNET))
+    if (tt->type == DEV_TYPE_TAP
+          || (tt->type == DEV_TYPE_TUN && tt->topology == TOP_SUBNET)
+          || tt->type == DEV_TYPE_NULL )
     {
         tun = false;
     }
@@ -694,7 +695,8 @@ init_tun(const char *dev,        /* --dev option */
              * make sure they do not clash with our virtual subnet.
              */
 
-            for (curele = local_public; curele; curele = curele->ai_next) {
+            for (curele = local_public; curele; curele = curele->ai_next)
+            {
                 if (curele->ai_family == AF_INET)
                 {
                     check_addr_clash("local",
@@ -705,7 +707,8 @@ init_tun(const char *dev,        /* --dev option */
                 }
             }
 
-            for (curele = remote_public; curele; curele = curele->ai_next) {
+            for (curele = remote_public; curele; curele = curele->ai_next)
+            {
                 if (curele->ai_family == AF_INET)
                 {
                     check_addr_clash("remote",
@@ -1036,7 +1039,8 @@ do_ifconfig(struct tuntap *tt,
         struct buffer out = alloc_buf_gc(64, &gc);
 
         char *top;
-        switch (tt->topology) {
+        switch (tt->topology)
+        {
             case TOP_NET30:
                 top = "net30";
                 break;
@@ -1649,11 +1653,11 @@ write_tun_header(struct tuntap *tt, uint8_t *buf, int len)
     {
         u_int32_t type;
         struct iovec iv[2];
-        struct ip *iph;
+        struct openvpn_iphdr *iph;
 
-        iph = (struct ip *) buf;
+        iph = (struct openvpn_iphdr *) buf;
 
-        if (iph->ip_v == 6)
+        if (OPENVPN_IPH_GET_VER(iph->version_len) == 6)
         {
             type = htonl(AF_INET6);
         }
@@ -1835,12 +1839,14 @@ open_tun(const char *dev, const char *dev_type, const char *dev_node, struct tun
 
     /* Prefer IPv6 DNS servers,
      * Android will use the DNS server in the order we specify*/
-    for (int i = 0; i < tt->options.dns6_len; i++) {
+    for (int i = 0; i < tt->options.dns6_len; i++)
+    {
         management_android_control(management, "DNS6SERVER",
                                    print_in6_addr(tt->options.dns6[i], 0, &gc));
     }
 
-    for (int i = 0; i < tt->options.dns_len; i++) {
+    for (int i = 0; i < tt->options.dns_len; i++)
+    {
         management_android_control(management, "DNSSERVER",
                                    print_in_addr_t(tt->options.dns[i], 0, &gc));
     }
@@ -1856,7 +1862,7 @@ open_tun(const char *dev, const char *dev_type, const char *dev_node, struct tun
     if (oldtunfd >=0 && android_method == ANDROID_OPEN_AFTER_CLOSE)
     {
         close(oldtunfd);
-        openvpn_sleep(2);
+        management_sleep(2);
     }
 
     if (oldtunfd >=0  && android_method == ANDROID_KEEP_OLD_TUN)
@@ -2254,7 +2260,9 @@ open_tun(const char *dev, const char *dev_type, const char *dev_node, struct tun
     {
         ptr = dev;
         while (*ptr && !isdigit((int) *ptr))
+        {
             ptr++;
+        }
         ppa = atoi(ptr);
     }
 
@@ -2555,8 +2563,7 @@ open_tun(const char *dev, const char *dev_type, const char *dev_node, struct tun
 
         if (ioctl(tt->fd, TUNGIFINFO, &info) < 0)
         {
-            msg(M_WARN | M_ERRNO, "Can't get interface info: %s",
-                strerror(errno));
+            msg(M_WARN | M_ERRNO, "Can't get interface info");
         }
 
 #ifdef IFF_MULTICAST /* openbsd 4.x doesn't have this */
@@ -2565,8 +2572,7 @@ open_tun(const char *dev, const char *dev_type, const char *dev_node, struct tun
 
         if (ioctl(tt->fd, TUNSIFINFO, &info) < 0)
         {
-            msg(M_WARN | M_ERRNO, "Can't set interface info: %s",
-                strerror(errno));
+            msg(M_WARN | M_ERRNO, "Can't set interface info");
         }
     }
 }
@@ -2655,7 +2661,7 @@ open_tun(const char *dev, const char *dev_type, const char *dev_node, struct tun
             i = 1;
             if (ioctl(tt->fd, TUNSIFHEAD, &i) < 0)      /* multi-af mode on */
             {
-                msg(M_WARN | M_ERRNO, "ioctl(TUNSIFHEAD): %s", strerror(errno));
+                msg(M_WARN | M_ERRNO, "ioctl(TUNSIFHEAD)");
             }
         }
     }
@@ -2788,12 +2794,12 @@ open_tun(const char *dev, const char *dev_type, const char *dev_node, struct tun
 
         if (ioctl(tt->fd, TUNSIFMODE, &i) < 0)
         {
-            msg(M_WARN | M_ERRNO, "ioctl(TUNSIFMODE): %s", strerror(errno));
+            msg(M_WARN | M_ERRNO, "ioctl(TUNSIFMODE)");
         }
         i = 1;
         if (ioctl(tt->fd, TUNSIFHEAD, &i) < 0)
         {
-            msg(M_WARN | M_ERRNO, "ioctl(TUNSIFHEAD): %s", strerror(errno));
+            msg(M_WARN | M_ERRNO, "ioctl(TUNSIFHEAD)");
         }
     }
 }
@@ -3014,16 +3020,14 @@ utun_open_helper(struct ctl_info ctlInfo, int utunnum)
 
     if (fd < 0)
     {
-        msg(M_INFO, "Opening utun (%s): %s", "socket(SYSPROTO_CONTROL)",
-            strerror(errno));
+        msg(M_INFO | M_ERRNO, "Opening utun (socket(SYSPROTO_CONTROL))");
         return -2;
     }
 
     if (ioctl(fd, CTLIOCGINFO, &ctlInfo) == -1)
     {
         close(fd);
-        msg(M_INFO, "Opening utun (%s): %s", "ioctl(CTLIOCGINFO)",
-            strerror(errno));
+        msg(M_INFO | M_ERRNO, "Opening utun (ioctl(CTLIOCGINFO))");
         return -2;
     }
 
@@ -3041,8 +3045,7 @@ utun_open_helper(struct ctl_info ctlInfo, int utunnum)
 
     if (connect(fd, (struct sockaddr *)&sc, sizeof(sc)) < 0)
     {
-        msg(M_INFO, "Opening utun (%s): %s", "connect(AF_SYS_CONTROL)",
-            strerror(errno));
+        msg(M_INFO | M_ERRNO, "Opening utun (connect(AF_SYS_CONTROL))");
         close(fd);
         return -1;
     }
@@ -3277,7 +3280,10 @@ open_tun(const char *dev, const char *dev_type, const char *dev_node, struct tun
     {
         /* ensure that dev name is "tap+<digits>" *only* */
         p = &dev[3];
-        while (isdigit(*p) ) p++;
+        while (isdigit(*p) )
+        {
+            p++;
+        }
         if (*p != '\0')
         {
             msg( M_FATAL, "TAP device name must be '--dev tapNNNN'" );
@@ -4993,7 +4999,7 @@ netsh_command(const struct argv *a, int n, int msglevel)
     for (i = 0; i < n; ++i)
     {
         bool status;
-        openvpn_sleep(1);
+        management_sleep(1);
         netcmd_semaphore_lock();
         argv_msg_prefix(M_INFO, a, "NETSH");
         status = openvpn_execve_check(a, NULL, 0, "ERROR: netsh command failed");
@@ -5002,7 +5008,7 @@ netsh_command(const struct argv *a, int n, int msglevel)
         {
             return;
         }
-        openvpn_sleep(4);
+        management_sleep(4);
     }
     msg(msglevel, "NETSH: command failed");
 }
@@ -5455,7 +5461,9 @@ write_dhcp_u32_array(struct buffer *buf, const int type, const uint32_t *data, c
         buf_write_u8(buf, type);
         buf_write_u8(buf, size);
         for (i = 0; i < len; ++i)
+        {
             buf_write_u32(buf, data[i]);
+        }
     }
 }
 
@@ -5983,7 +5991,7 @@ open_tun(const char *dev, const char *dev_type, const char *dev_node, struct tun
         if (s > 0)
         {
             msg(M_INFO, "Sleeping for %d seconds...", s);
-            openvpn_sleep(s);
+            management_sleep(s);
         }
     }
 
@@ -6224,10 +6232,7 @@ close_tun(struct tuntap *tt)
         }
 #endif
 
-        if (tt->options.dhcp_release)
-        {
-            dhcp_release(tt);
-        }
+        dhcp_release(tt);
 
         if (tt->hand != NULL)
         {
@@ -6287,10 +6292,12 @@ ascii2ipset(const char *name)
     int i;
     ASSERT(IPW32_SET_N == SIZE(ipset_names));
     for (i = 0; i < IPW32_SET_N; ++i)
+    {
         if (!strcmp(name, ipset_names[i].short_form))
         {
             return i;
         }
+    }
     return -1;
 }
 

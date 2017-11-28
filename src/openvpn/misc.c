@@ -18,10 +18,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -54,116 +53,6 @@ const char *iproute_path = IPROUTE_PATH; /* GLOBAL */
 
 /* contains an SSEC_x value defined in misc.h */
 int script_security = SSEC_BUILT_IN; /* GLOBAL */
-
-/*
- * Pass tunnel endpoint and MTU parms to a user-supplied script.
- * Used to execute the up/down script/plugins.
- */
-void
-run_up_down(const char *command,
-            const struct plugin_list *plugins,
-            int plugin_type,
-            const char *arg,
-#ifdef _WIN32
-            DWORD adapter_index,
-#endif
-            const char *dev_type,
-            int tun_mtu,
-            int link_mtu,
-            const char *ifconfig_local,
-            const char *ifconfig_remote,
-            const char *context,
-            const char *signal_text,
-            const char *script_type,
-            struct env_set *es)
-{
-    struct gc_arena gc = gc_new();
-
-    if (signal_text)
-    {
-        setenv_str(es, "signal", signal_text);
-    }
-    setenv_str(es, "script_context", context);
-    setenv_int(es, "tun_mtu", tun_mtu);
-    setenv_int(es, "link_mtu", link_mtu);
-    setenv_str(es, "dev", arg);
-    if (dev_type)
-    {
-        setenv_str(es, "dev_type", dev_type);
-    }
-#ifdef _WIN32
-    setenv_int(es, "dev_idx", adapter_index);
-#endif
-
-    if (!ifconfig_local)
-    {
-        ifconfig_local = "";
-    }
-    if (!ifconfig_remote)
-    {
-        ifconfig_remote = "";
-    }
-    if (!context)
-    {
-        context = "";
-    }
-
-    if (plugin_defined(plugins, plugin_type))
-    {
-        struct argv argv = argv_new();
-        ASSERT(arg);
-        argv_printf(&argv,
-                    "%s %d %d %s %s %s",
-                    arg,
-                    tun_mtu, link_mtu,
-                    ifconfig_local, ifconfig_remote,
-                    context);
-
-        if (plugin_call(plugins, plugin_type, &argv, NULL, es) != OPENVPN_PLUGIN_FUNC_SUCCESS)
-        {
-            msg(M_FATAL, "ERROR: up/down plugin call failed");
-        }
-
-        argv_reset(&argv);
-    }
-
-    if (command)
-    {
-        struct argv argv = argv_new();
-        ASSERT(arg);
-        setenv_str(es, "script_type", script_type);
-        argv_parse_cmd(&argv, command);
-        argv_printf_cat(&argv, "%s %d %d %s %s %s", arg, tun_mtu, link_mtu,
-                        ifconfig_local, ifconfig_remote, context);
-        argv_msg(M_INFO, &argv);
-        openvpn_run_script(&argv, es, S_FATAL, "--up/--down");
-        argv_reset(&argv);
-    }
-
-    gc_free(&gc);
-}
-
-/* Write our PID to a file */
-void
-write_pid(const char *filename)
-{
-    if (filename)
-    {
-        unsigned int pid = 0;
-        FILE *fp = platform_fopen(filename, "w");
-        if (!fp)
-        {
-            msg(M_ERR, "Open error on pid file %s", filename);
-        }
-
-        pid = platform_getpid();
-        fprintf(fp, "%u\n", pid);
-        if (fclose(fp))
-        {
-            msg(M_ERR, "Close error on pid file %s", filename);
-        }
-    }
-}
 
 /*
  * Set standard file descriptors to /dev/null
@@ -427,40 +316,6 @@ openvpn_popen(const struct argv *a,  const struct env_set *es)
 
 
 /*
- * Initialize random number seed.  random() is only used
- * when "weak" random numbers are acceptable.
- * OpenSSL routines are always used when cryptographically
- * strong random numbers are required.
- */
-
-void
-init_random_seed(void)
-{
-    struct timeval tv;
-
-    if (!gettimeofday(&tv, NULL))
-    {
-        const unsigned int seed = (unsigned int) tv.tv_sec ^ tv.tv_usec;
-        srandom(seed);
-    }
-}
-
-/* thread-safe strerror */
-
-const char *
-strerror_ts(int errnum, struct gc_arena *gc)
-{
-#ifdef HAVE_STRERROR
-    struct buffer out = alloc_buf_gc(256, gc);
-
-    buf_printf(&out, "%s", openvpn_strerror(errnum, gc));
-    return BSTR(&out);
-#else
-    return "[error string unavailable]";
-#endif
-}
-
-/*
  * Set environmental variable (int or string).
  *
  * On Posix, we use putenv for portability,
@@ -483,29 +338,6 @@ construct_name_value(const char *name, const char *value, struct gc_arena *gc)
     out = alloc_buf_gc(strlen(name) + strlen(value) + 2, gc);
     buf_printf(&out, "%s=%s", name, value);
     return BSTR(&out);
-}
-
-bool
-deconstruct_name_value(const char *str, const char **name, const char **value, struct gc_arena *gc)
-{
-    char *cp;
-
-    ASSERT(str);
-    ASSERT(name && value);
-
-    *name = cp = string_alloc(str, gc);
-    *value = NULL;
-
-    while ((*cp))
-    {
-        if (*cp == '=' && !*value)
-        {
-            *cp = 0;
-            *value = cp + 1;
-        }
-        ++cp;
-    }
-    return *name && *value;
 }
 
 static bool
@@ -650,7 +482,8 @@ const char *
 env_set_get(const struct env_set *es, const char *name)
 {
     const struct env_item *item = es->list;
-    while (item && !env_string_equal(item->string, name)) {
+    while (item && !env_string_equal(item->string, name))
+    {
         item = item->next;
     }
     return item ? item->string : NULL;
@@ -700,57 +533,6 @@ env_set_inherit(struct env_set *es, const struct env_set *src)
     }
 }
 
-void
-env_set_add_to_environment(const struct env_set *es)
-{
-    if (es)
-    {
-        struct gc_arena gc = gc_new();
-        const struct env_item *e;
-
-        e = es->list;
-
-        while (e)
-        {
-            const char *name;
-            const char *value;
-
-            if (deconstruct_name_value(e->string, &name, &value, &gc))
-            {
-                setenv_str(NULL, name, value);
-            }
-
-            e = e->next;
-        }
-        gc_free(&gc);
-    }
-}
-
-void
-env_set_remove_from_environment(const struct env_set *es)
-{
-    if (es)
-    {
-        struct gc_arena gc = gc_new();
-        const struct env_item *e;
-
-        e = es->list;
-
-        while (e)
-        {
-            const char *name;
-            const char *value;
-
-            if (deconstruct_name_value(e->string, &name, &value, &gc))
-            {
-                setenv_del(NULL, name);
-            }
-
-            e = e->next;
-        }
-        gc_free(&gc);
-    }
-}
 
 /* add/modify/delete environmental strings */
 
@@ -937,8 +719,6 @@ test_file(const char *filename)
     return ret;
 }
 
-#ifdef ENABLE_CRYPTO
-
 /* create a temporary filename in directory */
 const char *
 create_temp_file(const char *directory, const char *prefix, struct gc_arena *gc)
@@ -951,15 +731,11 @@ create_temp_file(const char *directory, const char *prefix, struct gc_arena *gc)
 
     do
     {
-        uint8_t rndbytes[16];
-        const char *rndstr;
-
         ++attempts;
         ++counter;
 
-        prng_bytes(rndbytes, sizeof rndbytes);
-        rndstr = format_hex_ex(rndbytes, sizeof rndbytes, 40, 0, NULL, gc);
-        buf_printf(&fname, PACKAGE "_%s_%s.tmp", prefix, rndstr);
+        buf_printf(&fname, PACKAGE "_%s_%08lx%08lx.tmp", prefix,
+                   (unsigned long) get_random(), (unsigned long) get_random());
 
         retfname = gen_path(directory, BSTR(&fname), gc);
         if (!retfname)
@@ -979,10 +755,8 @@ create_temp_file(const char *directory, const char *prefix, struct gc_arena *gc)
         else if (fd == -1 && errno != EEXIST)
         {
             /* Something else went wrong, no need to retry.  */
-            struct gc_arena gcerr = gc_new();
-            msg(M_FATAL, "Could not create temporary file '%s': %s",
-                retfname, strerror_ts(errno, &gcerr));
-            gc_free(&gcerr);
+            msg(M_FATAL | M_ERRNO, "Could not create temporary file '%s'",
+                retfname);
             return NULL;
         }
     }
@@ -991,6 +765,8 @@ create_temp_file(const char *directory, const char *prefix, struct gc_arena *gc)
     msg(M_FATAL, "Failed to create temporary file after %i attempts", attempts);
     return NULL;
 }
+
+#ifdef ENABLE_CRYPTO
 
 /*
  * Prepend a random string to hostname to prevent DNS caching.
@@ -1438,7 +1214,7 @@ get_user_pass_auto_userid(struct user_pass *up, const char *tag)
     static const uint8_t hashprefix[] = "AUTO_USERID_DIGEST";
 
     const md_kt_t *md5_kt = md_kt_get("MD5");
-    md_ctx_t ctx;
+    md_ctx_t *ctx;
 
     CLEAR(*up);
     buf_set_write(&buf, (uint8_t *)up->username, USER_PASS_LEN);
@@ -1446,11 +1222,13 @@ get_user_pass_auto_userid(struct user_pass *up, const char *tag)
     if (get_default_gateway_mac_addr(macaddr))
     {
         dmsg(D_AUTO_USERID, "GUPAU: macaddr=%s", format_hex_ex(macaddr, sizeof(macaddr), 0, 1, ":", &gc));
-        md_ctx_init(&ctx, md5_kt);
-        md_ctx_update(&ctx, hashprefix, sizeof(hashprefix) - 1);
-        md_ctx_update(&ctx, macaddr, sizeof(macaddr));
-        md_ctx_final(&ctx, digest);
-        md_ctx_cleanup(&ctx)
+        ctx = md_ctx_new();
+        md_ctx_init(ctx, md5_kt);
+        md_ctx_update(ctx, hashprefix, sizeof(hashprefix) - 1);
+        md_ctx_update(ctx, macaddr, sizeof(macaddr));
+        md_ctx_final(ctx, digest);
+        md_ctx_cleanup(ctx);
+        md_ctx_free(ctx);
         buf_printf(&buf, "%s", format_hex_ex(digest, sizeof(digest), 0, 256, " ", &gc));
     }
     else
@@ -1479,7 +1257,11 @@ purge_user_pass(struct user_pass *up, const bool force)
         secure_memzero(up, sizeof(*up));
         up->nocache = nocache;
     }
-    else if (!warn_shown)
+    /*
+     * don't show warning if the pass has been replaced by a token: this is an
+     * artificial "auth-nocache"
+     */
+    else if (!warn_shown && (!up->tokenized))
     {
         msg(M_WARN, "WARNING: this configuration may cache passwords in memory -- use the auth-nocache option to prevent this");
         warn_shown = true;
@@ -1493,6 +1275,7 @@ set_auth_token(struct user_pass *up, const char *token)
     {
         CLEAR(up->password);
         strncpynt(up->password, token, USER_PASS_LEN);
+        up->tokenized = true;
     }
 }
 
@@ -1547,7 +1330,9 @@ make_env_array(const struct env_set *es,
     if (es)
     {
         for (e = es->list; e != NULL; e = e->next)
+        {
             ++n;
+        }
     }
 
     /* alloc return array */
@@ -1609,7 +1394,9 @@ make_inline_array(const char *str, struct gc_arena *gc)
 
     buf_set_read(&buf, (const uint8_t *) str, strlen(str));
     while (buf_parse(&buf, '\n', line, sizeof(line)))
+    {
         ++len;
+    }
 
     /* alloc return array */
     ALLOC_ARRAY_CLEAR_GC(ret, char *, len + 1, gc);
@@ -1639,7 +1426,9 @@ make_arg_copy(char **p, struct gc_arena *gc)
     ALLOC_ARRAY_CLEAR_GC(ret, char *, max_parms, gc);
 
     for (i = 0; i < len; ++i)
+    {
         ret[i] = p[i];
+    }
 
     return (const char **)ret;
 }
@@ -1668,37 +1457,6 @@ make_extended_arg_array(char **p, struct gc_arena *gc)
     {
         return make_arg_copy(p, gc);
     }
-}
-
-void
-openvpn_sleep(const int n)
-{
-#ifdef ENABLE_MANAGEMENT
-    if (management)
-    {
-        management_event_loop_n_seconds(management, n);
-        return;
-    }
-#endif
-    sleep(n);
-}
-
-/*
- * Return the next largest power of 2
- * or u if u is a power of 2.
- */
-size_t
-adjust_power_of_2(size_t u)
-{
-    size_t ret = 1;
-
-    while (ret < u)
-    {
-        ret <<= 1;
-        ASSERT(ret > 0);
-    }
-
-    return ret;
 }
 
 /*

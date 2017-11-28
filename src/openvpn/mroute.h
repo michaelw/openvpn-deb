@@ -16,10 +16,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #ifndef MROUTE_H
@@ -182,9 +181,9 @@ mroute_extract_addr_from_packet(struct mroute_addr *src,
                                 const struct buffer *buf,
                                 int tunnel_type)
 {
-    unsigned int mroute_extract_addr_ipv4(struct mroute_addr *src,
-                                          struct mroute_addr *dest,
-                                          const struct buffer *buf);
+    unsigned int mroute_extract_addr_ip(struct mroute_addr *src,
+                                     struct mroute_addr *dest,
+                                     const struct buffer *buf);
 
     unsigned int mroute_extract_addr_ether(struct mroute_addr *src,
                                            struct mroute_addr *dest,
@@ -196,7 +195,7 @@ mroute_extract_addr_from_packet(struct mroute_addr *src,
     verify_align_4(buf);
     if (tunnel_type == DEV_TYPE_TUN)
     {
-        ret = mroute_extract_addr_ipv4(src, dest, buf);
+        ret = mroute_extract_addr_ip(src, dest, buf);
     }
     else if (tunnel_type == DEV_TYPE_TAP)
     {

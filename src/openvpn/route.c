@@ -16,10 +16,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 /*
@@ -519,14 +518,14 @@ add_route_ipv6_to_option_list(struct route_ipv6_option_list *l,
     l->routes_ipv6 = ro;
 }
 
-void
+static void
 clear_route_list(struct route_list *rl)
 {
     gc_free(&rl->gc);
     CLEAR(*rl);
 }
 
-void
+static void
 clear_route_ipv6_list(struct route_ipv6_list *rl6)
 {
     gc_free(&rl6->gc);
@@ -986,11 +985,19 @@ redirect_default_route_to_vpn(struct route_list *rl, const struct tuntap *tt, un
 
     if (rl && rl->flags & RG_ENABLE)
     {
+        bool local = rl->flags & RG_LOCAL;
+
         if (!(rl->spec.flags & RTSA_REMOTE_ENDPOINT) && (rl->flags & RG_REROUTE_GW))
         {
             msg(M_WARN, "%s VPN gateway parameter (--route-gateway or --ifconfig) is missing", err);
         }
-        else if (!(rl->rgi.flags & RGI_ADDR_DEFINED))
+        /*
+         * check if a default route is defined, unless:
+         * - we are connecting to a remote host in our network
+         * - we are connecting to a non-IPv4 remote host (i.e. we use IPv6)
+         */
+        else if (!(rl->rgi.flags & RGI_ADDR_DEFINED) && !local
+                 && (rl->spec.remote_host != IPV4_INVALID_ADDR))
         {
             msg(M_WARN, "%s Cannot read current default gateway from system", err);
         }
@@ -1001,7 +1008,6 @@ redirect_default_route_to_vpn(struct route_list *rl, const struct tuntap *tt, un
         else
         {
 #ifndef TARGET_ANDROID
-            bool local = BOOL_CAST(rl->flags & RG_LOCAL);
             if (rl->flags & RG_AUTO_LOCAL)
             {
                 const int tla = rl->spec.remote_host_local;
@@ -1066,14 +1072,13 @@ redirect_default_route_to_vpn(struct route_list *rl, const struct tuntap *tt, un
                 }
                 else
                 {
-                    /* delete default route */
-                    del_route3(0,
-                               0,
-                               rl->rgi.gateway.addr,
-                               tt,
-                               flags | ROUTE_REF_GW,
-                               &rl->rgi,
-                               es);
+                    /* don't try to remove the def route if it does not exist */
+                    if (rl->rgi.flags & RGI_ADDR_DEFINED)
+                    {
+                        /* delete default route */
+                        del_route3(0, 0, rl->rgi.gateway.addr, tt,
+                                   flags | ROUTE_REF_GW, &rl->rgi, es);
+                    }
 
                     /* add new default route */
                     add_route3(0,
@@ -1145,15 +1150,12 @@ undo_redirect_default_route_to_vpn(struct route_list *rl, const struct tuntap *t
                            flags,
                            &rl->rgi,
                            es);
-
-                /* restore original default route */
-                add_route3(0,
-                           0,
-                           rl->rgi.gateway.addr,
-                           tt,
-                           flags | ROUTE_REF_GW,
-                           &rl->rgi,
-                           es);
+                /* restore original default route if there was any */
+                if (rl->rgi.flags & RGI_ADDR_DEFINED)
+                {
+                    add_route3(0, 0, rl->rgi.gateway.addr, tt,
+                               flags | ROUTE_REF_GW, &rl->rgi, es);
+                }
             }
         }
 
@@ -1196,6 +1198,15 @@ add_routes(struct route_list *rl, struct route_ipv6_list *rl6, const struct tunt
     if (rl6 && !(rl6->iflags & RL_ROUTES_ADDED) )
     {
         struct route_ipv6 *r;
+
+        if (!tt->did_ifconfig_ipv6_setup)
+        {
+            msg(M_INFO, "WARNING: OpenVPN was configured to add an IPv6 "
+                "route over %s. However, no IPv6 has been configured for "
+                "this interface, therefore the route installation may "
+                "fail or may not work as expected.", tt->actual_name);
+        }
+
         for (r = rl6->routes_ipv6; r; r = r->next)
         {
             if (flags & ROUTE_DELETE_FIRST)
@@ -1281,7 +1292,9 @@ print_route_options(const struct route_option_list *rol,
             (rol->flags & RG_LOCAL) != 0);
     }
     for (ro = rol->routes; ro; ro = ro->next)
+    {
         print_route_option(ro, level);
+    }
 }
 
 void
@@ -1375,7 +1388,9 @@ print_routes(const struct route_list *rl, int level)
 {
     struct route_ipv4 *r;
     for (r = rl->routes; r; r = r->next)
+    {
         print_route(r, level);
+    }
 }
 
 static void
@@ -1404,7 +1419,9 @@ setenv_routes(struct env_set *es, const struct route_list *rl)
     int i = 1;
     struct route_ipv4 *r;
     for (r = rl->routes; r; r = r->next)
+    {
         setenv_route(es, r, i++);
+    }
 }
 
 static void
@@ -1433,7 +1450,9 @@ setenv_routes_ipv6(struct env_set *es, const struct route_ipv6_list *rl6)
     int i = 1;
     struct route_ipv6 *r6;
     for (r6 = rl6->routes_ipv6; r6; r6 = r6->next)
+    {
         setenv_route_ipv6(es, r6, i++);
+    }
 }
 
 /*
@@ -1511,7 +1530,9 @@ add_route(struct route_ipv4 *r,
     struct gc_arena gc;
     struct argv argv = argv_new();
     const char *network;
+#if !defined(ENABLE_IPROUTE) && !defined(TARGET_AIX)
     const char *netmask;
+#endif
     const char *gateway;
     bool status = false;
     int is_local_route;
@@ -1524,7 +1545,9 @@ add_route(struct route_ipv4 *r,
     gc_init(&gc);
 
     network = print_in_addr_t(r->network, 0, &gc);
+#if !defined(ENABLE_IPROUTE) && !defined(TARGET_AIX)
     netmask = print_in_addr_t(r->netmask, 0, &gc);
+#endif
     gateway = print_in_addr_t(r->gateway, 0, &gc);
 
     is_local_route = local_route(r->network, r->netmask, r->gateway, rgi);
@@ -1874,14 +1897,6 @@ add_route_ipv6(struct route_ipv6 *r6, const struct tuntap *tt, unsigned int flag
     }
 #endif
 
-    if (!tt->did_ifconfig_ipv6_setup)
-    {
-        msg( M_INFO, "add_route_ipv6(): not adding %s/%d: "
-             "no IPv6 address been configured on interface %s",
-             network, r6->netbits, device);
-        return;
-    }
-
     msg( M_INFO, "add_route_ipv6(%s/%d -> %s metric %d) dev %s",
          network, r6->netbits, gateway, r6->metric, device );
 
@@ -2121,8 +2136,12 @@ delete_route(struct route_ipv4 *r,
     struct gc_arena gc;
     struct argv argv = argv_new();
     const char *network;
+#if !defined(ENABLE_IPROUTE) && !defined(TARGET_AIX)
     const char *netmask;
+#endif
+#if !defined(TARGET_LINUX) && !defined(TARGET_ANDROID)
     const char *gateway;
+#endif
     int is_local_route;
 
     if ((r->flags & (RT_DEFINED|RT_ADDED)) != (RT_DEFINED|RT_ADDED))
@@ -2133,8 +2152,12 @@ delete_route(struct route_ipv4 *r,
     gc_init(&gc);
 
     network = print_in_addr_t(r->network, 0, &gc);
+#if !defined(ENABLE_IPROUTE) && !defined(TARGET_AIX)
     netmask = print_in_addr_t(r->netmask, 0, &gc);
+#endif
+#if !defined(TARGET_LINUX) && !defined(TARGET_ANDROID)
     gateway = print_in_addr_t(r->gateway, 0, &gc);
+#endif
 
     is_local_route = local_route(r->network, r->netmask, r->gateway, rgi);
     if (is_local_route == LR_ERROR)
@@ -2623,7 +2646,9 @@ test_routes(const struct route_list *rl, const struct tuntap *tt)
         {
             struct route_ipv4 *r;
             for (r = rl->routes, len = 0; r; r = r->next, ++len)
+            {
                 test_route_helper(&ret, &count, &good, &ambig, adapters, r->gateway);
+            }
 
             if ((rl->flags & RG_ENABLE) && (rl->spec.flags & RTSA_REMOTE_ENDPOINT))
             {
@@ -3047,8 +3072,10 @@ do_route_ipv6_service(const bool add, const struct route_ipv6 *r, const struct t
 
     /* In TUN mode we use a special link-local address as the next hop.
      * The tapdrvr knows about it and will answer neighbor discovery packets.
+     * (only do this for routes actually using the tun/tap device)
      */
-    if (tt->type == DEV_TYPE_TUN)
+    if (tt->type == DEV_TYPE_TUN
+	 && msg.iface.index == tt->adapter_index )
     {
         inet_pton(AF_INET6, "fe80::8", &msg.gateway.ipv6);
     }
@@ -3426,7 +3453,14 @@ get_default_gateway_ipv6(struct route_ipv6_gateway_info *rgi6,
         if (nh->nlmsg_type == NLMSG_ERROR)
         {
             struct nlmsgerr *ne = (struct nlmsgerr *)NLMSG_DATA(nh);
-            msg(M_WARN, "GDG6: NLSMG_ERROR: error %d\n", ne->error);
+
+            /* since linux-4.11 -ENETUNREACH is returned when no route can be
+             * found. Don't print any error message in this case */
+            if (ne->error != -ENETUNREACH)
+            {
+                msg(M_WARN, "GDG6: NLMSG_ERROR: error %s\n",
+                    strerror(-ne->error));
+            }
             break;
         }
 
@@ -3581,6 +3615,9 @@ get_default_gateway(struct route_gateway_info *rgi)
     rtm.rtm_flags = RTF_UP | RTF_GATEWAY;
     rtm.rtm_version = RTM_VERSION;
     rtm.rtm_seq = ++seq;
+#ifdef TARGET_OPENBSD
+    rtm.rtm_tableid = getrtable();
+#endif
     rtm.rtm_addrs = rtm_addrs;
 
     so_dst.sa_family = AF_INET;
@@ -3608,7 +3645,8 @@ get_default_gateway(struct route_gateway_info *rgi)
         msg(M_WARN, "GDG: problem writing to routing socket");
         goto done;
     }
-    do {
+    do
+    {
         l = read(sockfd, (char *)&m_rtmsg, sizeof(m_rtmsg));
     } while (l > 0 && (rtm.rtm_seq != seq || rtm.rtm_pid != pid));
     close(sockfd);
@@ -3795,6 +3833,9 @@ get_default_gateway_ipv6(struct route_ipv6_gateway_info *rgi6,
     rtm.rtm_flags = RTF_UP;
     rtm.rtm_version = RTM_VERSION;
     rtm.rtm_seq = ++seq;
+#ifdef TARGET_OPENBSD
+    rtm.rtm_tableid = getrtable();
+#endif
 
     so_dst.sin6_family = AF_INET6;
     so_mask.sin6_family = AF_INET6;

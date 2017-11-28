@@ -16,10 +16,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -160,9 +159,8 @@ mroute_extract_addr_arp(struct mroute_addr *src,
 #endif /* ifdef ENABLE_PF */
 
 unsigned int
-mroute_extract_addr_ipv4(struct mroute_addr *src,
-                         struct mroute_addr *dest,
-                         const struct buffer *buf)
+mroute_extract_addr_ip(struct mroute_addr *src, struct mroute_addr *dest,
+                       const struct buffer *buf)
 {
     unsigned int ret = 0;
     if (BLEN(buf) >= 1)
@@ -268,7 +266,7 @@ mroute_extract_addr_ether(struct mroute_addr *src,
                 switch (ntohs(eth->proto))
                 {
                     case OPENVPN_ETH_P_IPV4:
-                        ret |= (mroute_extract_addr_ipv4(esrc, edest, &b) << MROUTE_SEC_SHIFT);
+                        ret |= (mroute_extract_addr_ip(esrc, edest, &b) << MROUTE_SEC_SHIFT);
                         break;
 
                     case OPENVPN_ETH_P_ARP:
@@ -562,6 +560,7 @@ mroute_helper_free(struct mroute_helper *mh)
 
 #else  /* if P2MP_SERVER */
 static void
-dummy(void) {
+dummy(void)
+{
 }
 #endif /* P2MP_SERVER */

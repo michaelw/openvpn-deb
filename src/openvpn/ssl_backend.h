@@ -17,10 +17,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 /**
@@ -89,17 +88,17 @@ int pem_password_callback(char *buf, int size, int rwflag, void *u);
  * Perform any static initialisation necessary by the library.
  * Called on OpenVPN initialisation
  */
-void tls_init_lib();
+void tls_init_lib(void);
 
 /**
  * Free any global SSL library-specific data structures.
  */
-void tls_free_lib();
+void tls_free_lib(void);
 
 /**
  * Clear the underlying SSL library's error state.
  */
-void tls_clear_error();
+void tls_clear_error(void);
 
 /**
  * Parse a TLS version specifier

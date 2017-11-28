@@ -17,10 +17,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -65,7 +64,8 @@
 
 static void
 openvpn_encrypt_aead(struct buffer *buf, struct buffer work,
-                     struct crypto_options *opt) {
+                     struct crypto_options *opt)
+{
 #ifdef HAVE_AEAD_CIPHER_MODES
     struct gc_arena gc;
     int outlen = 0;
@@ -85,7 +85,6 @@ openvpn_encrypt_aead(struct buffer *buf, struct buffer work,
     /* Prepare IV */
     {
         struct buffer iv_buffer;
-        struct packet_id_net pin;
         uint8_t iv[OPENVPN_MAX_IV_LENGTH] = {0};
         const int iv_len = cipher_ctx_iv_length(ctx->cipher);
 
@@ -94,8 +93,11 @@ openvpn_encrypt_aead(struct buffer *buf, struct buffer work,
         buf_set_write(&iv_buffer, iv, iv_len);
 
         /* IV starts with packet id to make the IV unique for packet */
-        packet_id_alloc_outgoing(&opt->packet_id.send, &pin, false);
-        ASSERT(packet_id_write(&pin, &iv_buffer, false, false));
+        if (!packet_id_write(&opt->packet_id.send, &iv_buffer, false, false))
+        {
+            msg(D_CRYPT_ERRORS, "ENCRYPT ERROR: packet ID roll over");
+            goto err;
+        }
 
         /* Remainder of IV consists of implicit part (unique per session) */
         ASSERT(buf_write(&iv_buffer, ctx->implicit_iv, ctx->implicit_iv_len));
@@ -196,25 +198,25 @@ openvpn_encrypt_v1(struct buffer *buf, struct buffer work,
                 }
 
                 /* Put packet ID in plaintext buffer */
-                if (packet_id_initialized(&opt->packet_id))
+                if (packet_id_initialized(&opt->packet_id)
+                    && !packet_id_write(&opt->packet_id.send, buf,
+                                        opt->flags & CO_PACKET_ID_LONG_FORM,
+                                        true))
                 {
-                    struct packet_id_net pin;
-                    packet_id_alloc_outgoing(&opt->packet_id.send, &pin, BOOL_CAST(opt->flags & CO_PACKET_ID_LONG_FORM));
-                    ASSERT(packet_id_write(&pin, buf, BOOL_CAST(opt->flags & CO_PACKET_ID_LONG_FORM), true));
+                    msg(D_CRYPT_ERRORS, "ENCRYPT ERROR: packet ID roll over");
+                    goto err;
                 }
             }
             else if (cipher_kt_mode_ofb_cfb(cipher_kt))
             {
-                struct packet_id_net pin;
                 struct buffer b;
 
                 /* IV and packet-ID required for this mode. */
                 ASSERT(opt->flags & CO_USE_IV);
                 ASSERT(packet_id_initialized(&opt->packet_id));
 
-                packet_id_alloc_outgoing(&opt->packet_id.send, &pin, true);
                 buf_set_write(&b, iv_buf, iv_size);
-                ASSERT(packet_id_write(&pin, &b, true, false));
+                ASSERT(packet_id_write(&opt->packet_id.send, &b, true, false));
             }
             else /* We only support CBC, CFB, or OFB modes right now */
             {
@@ -262,11 +264,12 @@ openvpn_encrypt_v1(struct buffer *buf, struct buffer work,
         }
         else                            /* No Encryption */
         {
-            if (packet_id_initialized(&opt->packet_id))
+            if (packet_id_initialized(&opt->packet_id)
+                && !packet_id_write(&opt->packet_id.send, buf,
+                                    opt->flags & CO_PACKET_ID_LONG_FORM, true))
             {
-                struct packet_id_net pin;
-                packet_id_alloc_outgoing(&opt->packet_id.send, &pin, BOOL_CAST(opt->flags & CO_PACKET_ID_LONG_FORM));
-                ASSERT(packet_id_write(&pin, buf, BOOL_CAST(opt->flags & CO_PACKET_ID_LONG_FORM), true));
+                msg(D_CRYPT_ERRORS, "ENCRYPT ERROR: packet ID roll over");
+                goto err;
             }
             if (ctx->hmac)
             {
@@ -329,7 +332,8 @@ openvpn_encrypt(struct buffer *buf, struct buffer work,
 bool
 crypto_check_replay(struct crypto_options *opt,
                     const struct packet_id_net *pin, const char *error_prefix,
-                    struct gc_arena *gc) {
+                    struct gc_arena *gc)
+{
     bool ret = false;
     packet_id_reap_test(&opt->packet_id.rec);
     if (packet_id_test(&opt->packet_id.rec, pin))
@@ -804,7 +808,10 @@ init_key_type(struct key_type *kt, const char *ciphername,
     {
         if (warn)
         {
-            msg(M_WARN, "******* WARNING *******: null cipher specified, no encryption will be used");
+            msg(M_WARN, "******* WARNING *******: '--cipher none' was specified. "
+                "This means NO encryption will be performed and tunnelled "
+                "data WILL be transmitted in clear text over the network! "
+                "PLEASE DO RECONSIDER THIS SETTING!");
         }
     }
     if (strcmp(authname, "none") != 0)
@@ -824,7 +831,11 @@ init_key_type(struct key_type *kt, const char *ciphername,
     {
         if (warn)
         {
-            msg(M_WARN, "******* WARNING *******: null MAC specified, no authentication will be used");
+            msg(M_WARN, "******* WARNING *******: '--auth none' was specified. "
+                "This means no authentication will be performed on received "
+                "packets, meaning you CANNOT trust that the data received by "
+                "the remote side have NOT been manipulated. "
+                "PLEASE DO RECONSIDER THIS SETTING!");
         }
     }
 }
@@ -840,7 +851,7 @@ init_key_ctx(struct key_ctx *ctx, struct key *key,
     if (kt->cipher && kt->cipher_length > 0)
     {
 
-        ALLOC_OBJ(ctx->cipher, cipher_ctx_t);
+        ctx->cipher = cipher_ctx_new();
         cipher_ctx_init(ctx->cipher, key->cipher, kt->cipher_length,
                         kt->cipher, enc);
 
@@ -864,7 +875,7 @@ init_key_ctx(struct key_ctx *ctx, struct key *key,
     }
     if (kt->digest && kt->hmac_length > 0)
     {
-        ALLOC_OBJ(ctx->hmac, hmac_ctx_t);
+        ctx->hmac = hmac_ctx_new();
         hmac_ctx_init(ctx->hmac, key->hmac, kt->hmac_length, kt->digest);
 
         msg(D_HANDSHAKE,
@@ -884,18 +895,38 @@ init_key_ctx(struct key_ctx *ctx, struct key *key,
 }
 
 void
+init_key_ctx_bi(struct key_ctx_bi *ctx, const struct key2 *key2,
+                int key_direction, const struct key_type *kt, const char *name)
+{
+    char log_prefix[128] = { 0 };
+    struct key_direction_state kds;
+
+    key_direction_state_init(&kds, key_direction);
+
+    openvpn_snprintf(log_prefix, sizeof(log_prefix), "Outgoing %s", name);
+    init_key_ctx(&ctx->encrypt, &key2->keys[kds.out_key], kt,
+                 OPENVPN_OP_ENCRYPT, log_prefix);
+
+    openvpn_snprintf(log_prefix, sizeof(log_prefix), "Incoming %s", name);
+    init_key_ctx(&ctx->decrypt, &key2->keys[kds.in_key], kt,
+                 OPENVPN_OP_DECRYPT, log_prefix);
+
+    ctx->initialized = true;
+}
+
+void
 free_key_ctx(struct key_ctx *ctx)
 {
     if (ctx->cipher)
     {
         cipher_ctx_cleanup(ctx->cipher);
-        free(ctx->cipher);
+        cipher_ctx_free(ctx->cipher);
         ctx->cipher = NULL;
     }
     if (ctx->hmac)
     {
         hmac_ctx_cleanup(ctx->hmac);
-        free(ctx->hmac);
+        hmac_ctx_free(ctx->hmac);
         ctx->hmac = NULL;
     }
     ctx->implicit_iv_len = 0;
@@ -1019,7 +1050,8 @@ generate_key_random(struct key *key, const struct key_type *kt)
 
     struct gc_arena gc = gc_new();
 
-    do {
+    do
+    {
         CLEAR(*key);
         if (kt)
         {
@@ -1172,7 +1204,6 @@ crypto_read_openvpn_key(const struct key_type *key_type,
 {
     struct key2 key2;
     struct key_direction_state kds;
-    char log_prefix[128] = { 0 };
 
     if (key_inline)
     {
@@ -1197,13 +1228,7 @@ crypto_read_openvpn_key(const struct key_type *key_type,
     must_have_n_keys(key_file, opt_name, &key2, kds.need_keys);
 
     /* initialize key in both directions */
-    openvpn_snprintf(log_prefix, sizeof(log_prefix), "Outgoing %s", key_name);
-    init_key_ctx(&ctx->encrypt, &key2.keys[kds.out_key], key_type,
-                 OPENVPN_OP_ENCRYPT, log_prefix);
-    openvpn_snprintf(log_prefix, sizeof(log_prefix), "Incoming %s", key_name);
-    init_key_ctx(&ctx->decrypt, &key2.keys[kds.in_key], key_type,
-                 OPENVPN_OP_DECRYPT, log_prefix);
-
+    init_key_ctx_bi(ctx, &key2, key_direction, key_type, key_name);
     secure_memzero(&key2, sizeof(key2));
 }
 
@@ -1272,7 +1297,7 @@ read_key_file(struct key2 *key2, const char *file, const unsigned int flags)
         fd = platform_open(file, O_RDONLY, 0);
         if (fd == -1)
         {
-            msg(M_ERR, "Cannot open file key file '%s'", file);
+            msg(M_ERR, "Cannot open key file '%s'", file);
         }
         size = read(fd, in.data, in.capacity);
         if (size < 0)
@@ -1664,6 +1689,11 @@ read_key(struct key *key, const struct key_type *kt, struct buffer *buf)
         goto read_err;
     }
 
+    if (cipher_length != kt->cipher_length || hmac_length != kt->hmac_length)
+    {
+        goto key_len_err;
+    }
+
     if (!buf_read(buf, key->cipher, cipher_length))
     {
         goto read_err;
@@ -1671,11 +1701,6 @@ read_key(struct key *key, const struct key_type *kt, struct buffer *buf)
     if (!buf_read(buf, key->hmac, hmac_length))
     {
         goto read_err;
-    }
-
-    if (cipher_length != kt->cipher_length || hmac_length != kt->hmac_length)
-    {
-        goto key_len_err;
     }
 
     return 1;
@@ -1704,7 +1729,7 @@ static int nonce_secret_len = 0; /* GLOBAL */
 
 /* Reset the nonce value, also done periodically to refresh entropy */
 static void
-prng_reset_nonce()
+prng_reset_nonce(void)
 {
     const int size = md_kt_size(nonce_md) + nonce_secret_len;
 #if 1 /* Must be 1 for real usage */
@@ -1783,7 +1808,7 @@ prng_bytes(uint8_t *output, int len)
 
 /* an analogue to the random() function, but use prng_bytes */
 long int
-get_random()
+get_random(void)
 {
     long int l;
     prng_bytes((unsigned char *)&l, sizeof(l));
@@ -1795,7 +1820,8 @@ get_random()
 }
 
 static const cipher_name_pair *
-get_cipher_name_pair(const char *cipher_name) {
+get_cipher_name_pair(const char *cipher_name)
+{
     const cipher_name_pair *pair;
     size_t i = 0;
 
@@ -1815,7 +1841,8 @@ get_cipher_name_pair(const char *cipher_name) {
 }
 
 const char *
-translate_cipher_name_from_openvpn(const char *cipher_name) {
+translate_cipher_name_from_openvpn(const char *cipher_name)
+{
     const cipher_name_pair *pair = get_cipher_name_pair(cipher_name);
 
     if (NULL == pair)
@@ -1827,7 +1854,8 @@ translate_cipher_name_from_openvpn(const char *cipher_name) {
 }
 
 const char *
-translate_cipher_name_to_openvpn(const char *cipher_name) {
+translate_cipher_name_to_openvpn(const char *cipher_name)
+{
     const cipher_name_pair *pair = get_cipher_name_pair(cipher_name);
 
     if (NULL == pair)

@@ -17,10 +17,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 /**
@@ -73,6 +72,7 @@ typedef mbedtls_md_context_t hmac_ctx_t;
 #define MD4_DIGEST_LENGTH       16
 #define MD5_DIGEST_LENGTH       16
 #define SHA_DIGEST_LENGTH       20
+#define SHA256_DIGEST_LENGTH    32
 #define DES_KEY_LENGTH 8
 
 /**
@@ -85,13 +85,13 @@ typedef mbedtls_md_context_t hmac_ctx_t;
  * added. During initialisation, a personalisation string will be added based
  * on the time, the PID, and a pointer to the random context.
  */
-mbedtls_ctr_drbg_context *rand_ctx_get();
+mbedtls_ctr_drbg_context *rand_ctx_get(void);
 
 #ifdef ENABLE_PREDICTION_RESISTANCE
 /**
  * Enable prediction resistance on the random number generator.
  */
-void rand_ctx_enable_prediction_resistance();
+void rand_ctx_enable_prediction_resistance(void);
 
 #endif
 
@@ -122,7 +122,8 @@ bool mbed_log_func_line(unsigned int flags, int errval, const char *func,
 /** Wraps mbed_log_func_line() to prevent function calls for non-errors */
 static inline bool
 mbed_log_func_line_lite(unsigned int flags, int errval,
-                        const char *func, int line) {
+                        const char *func, int line)
+{
     if (errval)
     {
         return mbed_log_func_line(flags, errval, func, line);

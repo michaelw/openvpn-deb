@@ -16,10 +16,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program (see the file COPYING included with this
- *  distribution); if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -34,6 +33,7 @@
 #include "forward.h"
 #include "multi.h"
 #include "win32.h"
+#include "platform.h"
 
 #include "memdbg.h"
 
@@ -48,6 +48,27 @@ process_signal_p2p(struct context *c)
     return process_signal(c);
 }
 
+/* Write our PID to a file */
+static void
+write_pid(const char *filename)
+{
+    if (filename)
+    {
+        unsigned int pid = 0;
+        FILE *fp = platform_fopen(filename, "w");
+        if (!fp)
+        {
+            msg(M_ERR, "Open error on pid file %s", filename);
+        }
+
+        pid = platform_getpid();
+        fprintf(fp, "%u\n", pid);
+        if (fclose(fp))
+        {
+            msg(M_ERR, "Close error on pid file %s", filename);
+        }
+    }
+}
 
 
 /**************************************************************************/
@@ -332,7 +353,8 @@ openvpn_main(int argc, char *argv[])
 
 #ifdef _WIN32
 int
-wmain(int argc, wchar_t *wargv[]) {
+wmain(int argc, wchar_t *wargv[])
+{
     char **argv;
     int ret;
     int i;
@@ -361,7 +383,8 @@ wmain(int argc, wchar_t *wargv[]) {
 }
 #else  /* ifdef _WIN32 */
 int
-main(int argc, char *argv[]) {
+main(int argc, char *argv[])
+{
     return openvpn_main(argc, argv);
 }
 #endif /* ifdef _WIN32 */
