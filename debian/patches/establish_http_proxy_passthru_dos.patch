@@ -19,13 +19,11 @@ Signed-off-by: Gert Doering <gert@greenie.muc.de>
  src/openvpn/proxy.c | 7 +++++++
  1 file changed, 7 insertions(+)
 
-Index: openvpn-2.4.0/src/openvpn/proxy.c
-===================================================================
---- openvpn-2.4.0.orig/src/openvpn/proxy.c	2017-06-22 08:37:45.337017695 -0400
-+++ openvpn-2.4.0/src/openvpn/proxy.c	2017-06-22 08:37:45.333017654 -0400
-@@ -870,6 +870,13 @@ establish_http_proxy_passthru(struct htt
-                 const char *algor = get_pa_var("algorithm", pa, &gc);
-                 const char *opaque = get_pa_var("opaque", pa, &gc);
+--- a/src/openvpn/proxy.c
++++ b/src/openvpn/proxy.c
+@@ -882,6 +882,13 @@
+                     goto error;
+                 }
  
 +                if ( !realm || !nonce )
 +                {
